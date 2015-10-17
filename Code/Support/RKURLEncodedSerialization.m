@@ -74,7 +74,7 @@ static NSString * AFPercentEscapedQueryStringValueFromStringWithEncoding(NSStrin
 #pragma mark -
 
 extern NSArray * RKAFQueryStringPairsFromDictionary(NSDictionary *dictionary);
-extern NSArray * RKAFQueryStringPairsFromKeyAndValue(NSString *key, id value);
+extern NSArray * RKAFQueryStringPairsFromKeyAndValue(NSString *key, id value, NSUInteger idx);
 
 static NSString * RKAFQueryStringFromParametersWithEncoding(NSDictionary *parameters, NSStringEncoding stringEncoding) {
     NSMutableArray *mutablePairs = [NSMutableArray array];
@@ -86,37 +86,39 @@ static NSString * RKAFQueryStringFromParametersWithEncoding(NSDictionary *parame
 }
 
 NSArray * RKAFQueryStringPairsFromDictionary(NSDictionary *dictionary) {
-    return RKAFQueryStringPairsFromKeyAndValue(nil, dictionary);
+    return RKAFQueryStringPairsFromKeyAndValue(nil, dictionary, 0);
 }
 
-NSArray * RKAFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
+NSArray * RKAFQueryStringPairsFromKeyAndValue(NSString *key, id value, NSInteger idx) {
     NSMutableArray *mutableQueryStringComponents = [NSMutableArray array];
-
+    
     NSSortDescriptor *sortDescriptor = [NSSortDescriptor sortDescriptorWithKey:@"description" ascending:YES selector:@selector(compare:)];
-
+    
     if ([value isKindOfClass:[NSDictionary class]]) {
         NSDictionary *dictionary = value;
         // Sort dictionary keys to ensure consistent ordering in query string, which is important when deserializing potentially ambiguous sequences, such as an array of dictionaries
         for (id nestedKey in [dictionary.allKeys sortedArrayUsingDescriptors:@[ sortDescriptor ]]) {
             id nestedValue = dictionary[nestedKey];
             if (nestedValue) {
-                [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue((key ? [NSString stringWithFormat:@"%@[%@]", key, nestedKey] : nestedKey), nestedValue)];
+                [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue((key ? [NSString stringWithFormat:@"%@[%@]", key, nestedKey] : nestedKey), nestedValue, idx)];
             }
         }
     } else if ([value isKindOfClass:[NSArray class]]) {
         NSArray *array = value;
         for (id nestedValue in array) {
-            [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue([NSString stringWithFormat:@"%@[]", key], nestedValue)];
+            NSString *pair = [NSString stringWithFormat:@"%@[%ld]", key, idx];
+            [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue(pair, nestedValue, ++idx)];
+            idx = 0;
         }
     } else if ([value isKindOfClass:[NSSet class]]) {
         NSSet *set = value;
         for (id obj in [set sortedArrayUsingDescriptors:@[ sortDescriptor ]]) {
-            [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue(key, obj)];
+            [mutableQueryStringComponents addObjectsFromArray:RKAFQueryStringPairsFromKeyAndValue(key, obj, idx)];
         }
     } else {
         [mutableQueryStringComponents addObject:[[RKAFQueryStringPair alloc] initWithField:key value:value]];
     }
-
+    
     return mutableQueryStringComponents;
 }
 
